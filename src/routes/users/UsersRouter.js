@@ -3,10 +3,10 @@ const { handleGetAllUsers, handleCreateUser, handleUpdateUserById, handleDeleteU
 const { authenticateToken, authorizeRoles } = require('../../middleware/authMiddleware');
 const userrouter = express.Router();
 
-userrouter.get("/",authenticateToken, authorizeRoles('admin'), handleGetAllUsers);
-userrouter.post("/",authenticateToken, authorizeRoles('admin'),  handleCreateUser);
-userrouter.put("/:id",authenticateToken, authorizeRoles('admin'),  handleUpdateUserById);
-userrouter.delete("/:id",authenticateToken, authorizeRoles('admin'), handleDeleteUserById);
+userrouter.get("/", handleGetAllUsers);
+userrouter.post("/",  handleCreateUser);
+userrouter.put("/:id",  handleUpdateUserById);
+userrouter.delete("/:id", handleDeleteUserById);
 
 module.exports = userrouter;
 
