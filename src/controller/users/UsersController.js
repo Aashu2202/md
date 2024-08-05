@@ -1,73 +1,82 @@
-const UserModel = require("../../models/users/UsersModel");
-const {deleteUserById} = require("../../utils/DeleteAllData");
-const {getAllDetails} = require("../../utils/GetAllData");
-
+const db = require('../../db');
+const { check, validationResult } = require('express-validator');
 
 // Get request method API
 async function handleGetAllUsers(req, res) {
-    getAllDetails(req,res,UserModel);
+    try {
+        const users = await db.any('SELECT * FROM users');
+        res.status(200).json(users);
+    } catch (err) {
+        console.error("Error fetching users:", err);
+        res.status(500).json({ error: "Something went wrong" });
+    }
 }
-// Post method API
-async function handleCreateUser(req, res) {
-    const {Email, Provider, First_name, Last_name, Password, Password_confirmation, Subscription_plan, Subscription_source, subscription_duration,AdminSubscriptionFlag,PreventAutoSubScriptionVerfify,Tester, AllDetails} = req.body;
 
-    if (!Email || !First_name || !Password || !Password_confirmation) {
-        return res.status(400).json({ error: "Email, name, and password are required" });
+// Post method API
+const validateUser = [
+    check('Email').isEmail().withMessage('Invalid email address'),
+    check('First_name').notEmpty().withMessage('First name is required'),
+    check('Password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters long'),
+    check('Password_confirmation').custom((value, { req }) => value === req.body.Password).withMessage('Passwords do not match'),
+    // Add more validations as needed
+];
+
+async function handleCreateUser(req, res) {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
     }
-    if (Password !== Password_confirmation) {
-        return res.status(400).json({ error: "Passwords do not match" });
-    }
+
+    const { Email, Provider, First_name, Last_name, Password, Subscription_plan, Subscription_source, subscription_duration, AdminSubscriptionFlag, PreventAutoSubScriptionVerfify, Tester, AllDetails } = req.body;
 
     try {
-        const newUser = await UserModel.create({
-            Email,
-            Provider,
-            First_name,
-            Last_name,
-            Password,
-            Password_confirmation,
-            Subscription_plan,
-            Subscription_source,
-            subscription_duration,
-            AdminSubscriptionFlag,
-            PreventAutoSubScriptionVerfify,
-            Tester,
-            AllDetails
-        });
-        return res.status(200).json({ status: "Successfully added to the user schema", newUser });
+        const result = await db.one(
+            `INSERT INTO users (email, provider, first_name, last_name, password, subscription_plan, subscription_source, subscription_duration, admin_subscription_flag, prevent_auto_subscription_verfify, tester, all_details) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
+            [Email, Provider, First_name, Last_name, Password, Subscription_plan, Subscription_source, subscription_duration, AdminSubscriptionFlag, PreventAutoSubScriptionVerfify, Tester, AllDetails]
+        );
+        res.status(200).json({ status: "Successfully added to the user schema", user: result });
     } catch (err) {
         console.error("Error in POST request:", err);
-        return res.status(500).json({ error: "Something went wrong" });
+        res.status(500).json({ error: "Something went wrong" });
     }
 }
 
 // Update the user data
 async function handleUpdateUserById(req, res) {
+    const { id } = req.params;
+    const { Email, Provider, First_name, Last_name, Password, Subscription_plan, Subscription_source, subscription_duration, AdminSubscriptionFlag, PreventAutoSubScriptionVerfify, Tester, AllDetails } = req.body;
+
     try {
-        const changes = req.body;
-        const updatedUser = await UserModel.findByIdAndUpdate(req.params._id, changes, { new: true });
-        if (!updatedUser) {
+        const result = await db.oneOrNone(
+            `UPDATE users SET email = $1, provider = $2, first_name = $3, last_name = $4, password = $5, subscription_plan = $6, subscription_source = $7, subscription_duration = $8, admin_subscription_flag = $9, prevent_auto_subscription_verfify = $10, tester = $11, all_details = $12
+            WHERE id = $13 RETURNING *`,
+            [Email, Provider, First_name, Last_name, Password, Subscription_plan, Subscription_source, subscription_duration, AdminSubscriptionFlag, PreventAutoSubScriptionVerfify, Tester, AllDetails, id]
+        );
+
+        if (!result) {
             return res.status(404).json({ status: "User not found" });
         }
-        return res.status(200).json({ status: "User updated successfully", updatedUser });
+        res.status(200).json({ status: "User updated successfully", user: result });
     } catch (err) {
         console.error("Error updating user:", err);
-        return res.status(500).json({ error: "Error updating user" });
+        res.status(500).json({ error: "Error updating user" });
     }
 }
 
 // Delete user
 async function handleDeleteUserById(req, res) {
+    const { id } = req.params;
+
     try {
-        const deletedUserStatus = deleteUserById(UserModel, req.params.id);
-        if(!deletedUserStatus) {
+        const result = await db.result('DELETE FROM users WHERE id = $1', id);
+        if (result.rowCount === 0) {
             return res.status(404).json({ error: "User not found" });
         }
-        return res.json({ status: "Success" });
-        
+        res.json({ status: "Success" });
     } catch (error) {
         console.error("Error deleting user:", error);
-        return res.status(500).json({ error: "Error deleting user" });
+        res.status(500).json({ error: "Error deleting user" });
     }
 }
 
@@ -76,4 +85,5 @@ module.exports = {
     handleCreateUser,
     handleUpdateUserById,
     handleDeleteUserById,
+    validateUser
 };
